@@ -12,6 +12,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -55,6 +56,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -339,8 +341,8 @@ private fun ControlBar(vm: PlayerViewModel) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AlbumArt(track.albumArtUri, Modifier.size(56.dp))
                 Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                    Text(track.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(track.artist, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    MarqueeText(track.title, style = MaterialTheme.typography.titleMedium)
+                    MarqueeText(track.artist, style = MaterialTheme.typography.bodySmall)
                 }
             }
 
@@ -400,6 +402,22 @@ private fun ControlBar(vm: PlayerViewModel) {
             }
         }
     }
+}
+
+/** 幅に収まらないときだけ自動で横スクロールする 1 行テキスト（収まる場合は静止したまま） */
+@Composable
+private fun MarqueeText(text: String, style: TextStyle) {
+    Text(
+        text,
+        style = style,
+        maxLines = 1,
+        softWrap = false,
+        modifier = Modifier.basicMarquee(
+            iterations = Int.MAX_VALUE,
+            repeatDelayMillis = 1500,
+            velocity = 40.dp,
+        ),
+    )
 }
 
 private fun formatTime(ms: Int): String {
