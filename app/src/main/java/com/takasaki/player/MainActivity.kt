@@ -2,12 +2,13 @@ package com.takasaki.player
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -18,8 +19,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -37,12 +40,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.media3.common.Player
+import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
 
 private val audioPermission: String
@@ -136,14 +144,32 @@ private fun PlayerScreen(vm: PlayerViewModel) {
     }
 }
 
+/** アルバムアート。取得できない場合は音符アイコンを表示する */
+@Composable
+private fun AlbumArt(uri: Uri?, size: Dp) {
+    val placeholder = painterResource(R.drawable.ic_music_note)
+    AsyncImage(
+        model = uri,
+        contentDescription = null,
+        placeholder = placeholder,
+        error = placeholder,
+        fallback = placeholder,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier
+            .size(size)
+            .clip(RoundedCornerShape(8.dp)),
+    )
+}
+
 @Composable
 private fun TrackRow(track: Track, selected: Boolean, onClick: () -> Unit) {
     val color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
+        AlbumArt(track.albumArtUri, size = 48.dp)
+        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
             Text(track.title, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 track.artist,
@@ -160,10 +186,18 @@ private fun TrackRow(track: Track, selected: Boolean, onClick: () -> Unit) {
 @Composable
 private fun ControlBar(vm: PlayerViewModel) {
     val track = vm.currentTrack ?: return
+    val activeColor = MaterialTheme.colorScheme.primary
+    val inactiveColor = MaterialTheme.colorScheme.onSurfaceVariant
+
     Surface(tonalElevation = 3.dp) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Text(track.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(track.artist, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AlbumArt(track.albumArtUri, size = 56.dp)
+                Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                    Text(track.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(track.artist, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
 
             // ドラッグ中はローカル値を表示し、指を離した時点で1回だけシークする
             val duration = track.durationMs.toFloat().coerceAtLeast(1f)
@@ -184,9 +218,16 @@ private fun ControlBar(vm: PlayerViewModel) {
 
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
+                horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                IconButton(onClick = vm::toggleShuffle) {
+                    Icon(
+                        painterResource(R.drawable.ic_shuffle),
+                        contentDescription = if (vm.shuffleEnabled) "シャッフル オン" else "シャッフル オフ",
+                        tint = if (vm.shuffleEnabled) activeColor else inactiveColor,
+                    )
+                }
                 IconButton(onClick = vm::previous) {
                     Icon(painterResource(R.drawable.ic_skip_previous), contentDescription = "前の曲")
                 }
@@ -198,6 +239,18 @@ private fun ControlBar(vm: PlayerViewModel) {
                 }
                 IconButton(onClick = vm::next) {
                     Icon(painterResource(R.drawable.ic_skip_next), contentDescription = "次の曲")
+                }
+                IconButton(onClick = vm::cycleRepeatMode) {
+                    val (icon, label, active) = when (vm.repeatMode) {
+                        Player.REPEAT_MODE_ONE -> Triple(R.drawable.ic_repeat_one, "1曲リピート", true)
+                        Player.REPEAT_MODE_ALL -> Triple(R.drawable.ic_repeat, "全曲リピート", true)
+                        else -> Triple(R.drawable.ic_repeat, "リピートなし", false)
+                    }
+                    Icon(
+                        painterResource(icon),
+                        contentDescription = label,
+                        tint = if (active) activeColor else inactiveColor,
+                    )
                 }
             }
         }

@@ -3,10 +3,10 @@
 Android 用の最小構成の音楽再生アプリです。
 
 ## 機能
-- 端末内の音楽ファイル（MediaStore）を一覧表示
+- 端末内の音楽ファイル（MediaStore）をアルバムアート付きで一覧表示
 - タップで再生、再生 / 一時停止、前の曲 / 次の曲
 - シークバーで再生位置の変更
-- 曲の終わりで自動的に次の曲へ（一覧の最後まで行くと先頭に戻る）
+- シャッフル、リピート（全曲 → 1曲 → なし の切り替え）
 - バックグラウンド再生（ホームに戻っても・画面を消しても再生を継続）
 - 通知・ロック画面・イヤホンのボタンから再生操作
 - イヤホンを抜くと自動で一時停止
@@ -15,6 +15,7 @@ Android 用の最小構成の音楽再生アプリです。
 ## 構成
 - Kotlin + Jetpack Compose (Material3)
 - 再生は Jetpack Media3（ExoPlayer + MediaSessionService）
+- アルバムアートの読み込みは Coil
 - minSdk 26 / targetSdk 36
 
 | ファイル | 役割 |
@@ -32,6 +33,3 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
-
-## 今後追加候補（現状は未対応）
-- シャッフル・リピート切り替え、プレイリスト、アルバムアート

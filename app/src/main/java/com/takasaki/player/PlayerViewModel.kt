@@ -25,6 +25,8 @@ data class Track(
     val artist: String,
     val durationMs: Int,
     val uri: Uri,
+    /** アルバムアート（無い場合は読み込みに失敗するのでプレースホルダー表示になる） */
+    val albumArtUri: Uri?,
 )
 
 /**
@@ -37,6 +39,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     var isPlaying by mutableStateOf(false)
         private set
     var positionMs by mutableIntStateOf(0)
+        private set
+    var shuffleEnabled by mutableStateOf(false)
+        private set
+    var repeatMode by mutableIntStateOf(Player.REPEAT_MODE_ALL)
         private set
 
     private var currentMediaId by mutableStateOf<String?>(null)
@@ -66,6 +72,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         isPlaying = player.isPlaying
         currentMediaId = player.currentMediaItem?.mediaId
         positionMs = player.currentPosition.toInt()
+        shuffleEnabled = player.shuffleModeEnabled
+        repeatMode = player.repeatMode
     }
 
     /** 端末内の音楽ファイルを MediaStore から読み込む */
@@ -75,6 +83,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             MediaStore.Audio.Media.TITLE,
             MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.DURATION,
+            MediaStore.Audio.Media.ALBUM_ID,
         )
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
         val sortOrder = "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
@@ -87,6 +96,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
             val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
             val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+            val albumIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idCol)
                 result += Track(
@@ -95,6 +105,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                     artist = cursor.getString(artistCol) ?: "Unknown",
                     durationMs = cursor.getInt(durationCol),
                     uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id),
+                    albumArtUri = ContentUris.withAppendedId(ALBUM_ART_URI, cursor.getLong(albumIdCol)),
                 )
             }
         }
@@ -127,6 +138,21 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         controller?.seekToPreviousMediaItem()
     }
 
+    fun toggleShuffle() {
+        val c = controller ?: return
+        c.shuffleModeEnabled = !c.shuffleModeEnabled
+    }
+
+    /** 全曲リピート → 1曲リピート → リピートなし の順に切り替える */
+    fun cycleRepeatMode() {
+        val c = controller ?: return
+        c.repeatMode = when (c.repeatMode) {
+            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+            Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_OFF
+            else -> Player.REPEAT_MODE_ALL
+        }
+    }
+
     fun seekTo(ms: Int) {
         controller?.seekTo(ms.toLong())
         positionMs = ms
@@ -143,6 +169,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         controller = null
     }
 
+    private companion object {
+        val ALBUM_ART_URI: Uri = Uri.parse("content://media/external/audio/albumart")
+    }
+
     private fun Track.toMediaItem(): MediaItem = MediaItem.Builder()
         .setMediaId(id.toString())
         .setUri(uri)
@@ -150,6 +180,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             MediaMetadata.Builder()
                 .setTitle(title)
                 .setArtist(artist)
+                .setArtworkUri(albumArtUri)
                 .build()
         )
         .build()
