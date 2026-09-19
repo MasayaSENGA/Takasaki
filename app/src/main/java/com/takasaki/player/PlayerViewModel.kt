@@ -18,6 +18,8 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
+import java.text.Collator
+import java.util.Locale
 
 data class Track(
     val id: Long,
@@ -62,7 +64,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         private set
     val currentTrack: Track? by derivedStateOf { tracks.firstOrNull { it.id.toString() == currentMediaId } }
 
-    /** 曲一覧をアルバム ID でまとめたもの。アルバム名順、アルバム内はトラック番号順 */
+    /**
+     * 曲一覧をアルバム ID でまとめたもの。
+     * tracks は既にアルバム名順・トラック番号順に並んでいるので、groupBy の順序（初出順）をそのまま使う。
+     */
     val albums: List<Album> by derivedStateOf {
         tracks.groupBy { it.albumId }.map { (id, list) ->
             val artists = list.map { it.artist }.distinct()
@@ -71,12 +76,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 title = list.first().album,
                 artist = if (artists.size == 1) artists.first() else "Various Artists",
                 artUri = list.first().albumArtUri,
-                // トラック番号順。番号の無い曲（0 以下）は末尾に回す
-                tracks = list.sortedWith(
-                    compareBy({ if (it.trackNumber > 0) it.trackNumber else Int.MAX_VALUE }, { it.title.lowercase() })
-                ),
+                tracks = list,
             )
-        }.sortedBy { it.title.lowercase() }
+        }
     }
 
     // 画面の表示状態（回転しても保持されるよう ViewModel に置く）
@@ -133,11 +135,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             MediaStore.Audio.Media.TRACK,
         )
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
-        val sortOrder = "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
         val result = mutableListOf<Track>()
 
         getApplication<Application>().contentResolver.query(
-            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, projection, selection, null, sortOrder,
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, projection, selection, null, null,
         )?.use { cursor ->
             val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
             val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
@@ -161,7 +162,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
         }
-        tracks = result
+        tracks = result.sortedWith(trackOrder)
     }
 
     /** queue（全曲やアルバムの曲一覧）をプレイリストとしてセットし、index の曲から再生する */
@@ -222,6 +223,18 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private companion object {
+        /**
+         * 日本語を含むタグでも自然に並ぶよう、文字コード順ではなく日本語ロケールの Collator で比較する。
+         * （ひらがな・カタカナ・英数字・全角半角を辞書順に扱う。漢字は読みが分からないため部首・画数ベースの順になる）
+         */
+        val collator: Collator = Collator.getInstance(Locale.JAPANESE)
+
+        /** 曲一覧の並び順: アルバム名 → アルバム ID（同名アルバムの分離） → トラック番号（無いものは末尾） → 曲名 */
+        val trackOrder: Comparator<Track> = compareBy<Track, String>(collator) { it.album }
+            .thenBy { it.albumId }
+            .thenBy { if (it.trackNumber > 0) it.trackNumber else Int.MAX_VALUE }
+            .thenBy(collator) { it.title }
+
         val ALBUM_ART_URI: Uri = Uri.parse("content://media/external/audio/albumart")
     }
 
