@@ -25,8 +25,20 @@ data class Track(
     val artist: String,
     val durationMs: Int,
     val uri: Uri,
+    val albumId: Long,
+    val album: String,
+    /** ディスク番号込みのトラック番号（MediaStore の TRACK 列。並び順にだけ使う） */
+    val trackNumber: Int,
     /** アルバムアート（無い場合は読み込みに失敗するのでプレースホルダー表示になる） */
     val albumArtUri: Uri?,
+)
+
+data class Album(
+    val id: Long,
+    val title: String,
+    val artist: String,
+    val artUri: Uri?,
+    val tracks: List<Track>,
 )
 
 /**
@@ -45,9 +57,41 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     var repeatMode by mutableIntStateOf(Player.REPEAT_MODE_ALL)
         private set
 
-    private var currentMediaId by mutableStateOf<String?>(null)
-    val currentIndex: Int by derivedStateOf { tracks.indexOfFirst { it.id.toString() == currentMediaId } }
-    val currentTrack: Track? get() = tracks.getOrNull(currentIndex)
+    /** 再生中の曲の ID（MediaItem の mediaId と同じ文字列） */
+    var currentMediaId by mutableStateOf<String?>(null)
+        private set
+    val currentTrack: Track? by derivedStateOf { tracks.firstOrNull { it.id.toString() == currentMediaId } }
+
+    /** 曲一覧をアルバム ID でまとめたもの。アルバム名順、アルバム内はトラック番号順 */
+    val albums: List<Album> by derivedStateOf {
+        tracks.groupBy { it.albumId }.map { (id, list) ->
+            val artists = list.map { it.artist }.distinct()
+            Album(
+                id = id,
+                title = list.first().album,
+                artist = if (artists.size == 1) artists.first() else "Various Artists",
+                artUri = list.first().albumArtUri,
+                // トラック番号順。番号の無い曲（0 以下）は末尾に回す
+                tracks = list.sortedWith(
+                    compareBy({ if (it.trackNumber > 0) it.trackNumber else Int.MAX_VALUE }, { it.title.lowercase() })
+                ),
+            )
+        }.sortedBy { it.title.lowercase() }
+    }
+
+    // 画面の表示状態（回転しても保持されるよう ViewModel に置く）
+    var selectedTab by mutableIntStateOf(0)
+    var selectedAlbumId by mutableStateOf<Long?>(null)
+        private set
+    val selectedAlbum: Album? get() = albums.firstOrNull { it.id == selectedAlbumId }
+
+    fun openAlbum(album: Album) {
+        selectedAlbumId = album.id
+    }
+
+    fun closeAlbum() {
+        selectedAlbumId = null
+    }
 
     private val controllerFuture: ListenableFuture<MediaController>
     private var controller: MediaController? = null
@@ -84,6 +128,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.ALBUM_ID,
+            MediaStore.Audio.Media.ALBUM,
+            MediaStore.Audio.Media.TRACK,
         )
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
         val sortOrder = "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
@@ -97,6 +143,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
             val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val albumIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+            val albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+            val trackCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idCol)
                 result += Track(
@@ -105,6 +153,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                     artist = cursor.getString(artistCol) ?: "Unknown",
                     durationMs = cursor.getInt(durationCol),
                     uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id),
+                    albumId = cursor.getLong(albumIdCol),
+                    album = cursor.getString(albumCol) ?: "Unknown Album",
+                    trackNumber = cursor.getInt(trackCol),
                     albumArtUri = ContentUris.withAppendedId(ALBUM_ART_URI, cursor.getLong(albumIdCol)),
                 )
             }
@@ -112,11 +163,11 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         tracks = result
     }
 
-    /** 一覧全体をプレイリストとしてセットし、index の曲から再生する */
-    fun play(index: Int) {
+    /** queue（全曲やアルバムの曲一覧）をプレイリストとしてセットし、index の曲から再生する */
+    fun play(queue: List<Track>, index: Int) {
         val c = controller ?: return
-        if (index !in tracks.indices) return
-        c.setMediaItems(tracks.map { it.toMediaItem() }, index, 0L)
+        if (index !in queue.indices) return
+        c.setMediaItems(queue.map { it.toMediaItem() }, index, 0L)
         c.prepare()
         c.play()
     }
@@ -124,7 +175,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun togglePlayPause() {
         val c = controller ?: return
         when {
-            c.mediaItemCount == 0 -> if (tracks.isNotEmpty()) play(0)
+            c.mediaItemCount == 0 -> if (tracks.isNotEmpty()) play(tracks, 0)
             c.isPlaying -> c.pause()
             else -> c.play()
         }
@@ -180,6 +231,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             MediaMetadata.Builder()
                 .setTitle(title)
                 .setArtist(artist)
+                .setAlbumTitle(album)
                 .setArtworkUri(albumArtUri)
                 .build()
         )
