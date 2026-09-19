@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 黒い連桁付き八分音符（円形マスクのセーフゾーン内に収まる大きさ） -->
+    <group android:scaleX="1.2" android:scaleY="1.2" android:pivotX="54" android:pivotY="54">
+        <path
+            android:fillColor="#000000"
+            android:pathData="M42,36 L42,66.5 A6,6 0 1 1 36,61 L36,36 Z M66,32 L66,62.5 A6,6 0 1 1 60,57 L60,32 Z M36,36 L66,32 L66,39 L36,43 Z" />
+    </group>
+</vector>
