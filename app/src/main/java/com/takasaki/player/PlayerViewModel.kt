@@ -80,6 +80,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // 画面の表示状態（回転しても保持されるよう ViewModel に置く）
+    /** 0 = アルバム、1 = 曲 */
     var selectedTab by mutableIntStateOf(0)
     var selectedAlbumId by mutableStateOf<Long?>(null)
         private set

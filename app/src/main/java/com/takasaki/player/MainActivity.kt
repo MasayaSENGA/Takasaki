@@ -17,10 +17,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -28,10 +26,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
@@ -49,6 +47,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,6 +63,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.Player
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private val audioPermission: String
     get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -145,15 +145,33 @@ private fun PlayerScreen(vm: PlayerViewModel) {
             when {
                 vm.tracks.isEmpty() -> EmptyMessage()
                 album != null -> AlbumDetail(vm, album)
-                else -> {
-                    TabRow(selectedTabIndex = vm.selectedTab) {
-                        Tab(selected = vm.selectedTab == 0, onClick = { vm.selectedTab = 0 }, text = { Text("曲") })
-                        Tab(selected = vm.selectedTab == 1, onClick = { vm.selectedTab = 1 }, text = { Text("アルバム") })
-                    }
-                    if (vm.selectedTab == 0) SongList(vm) else AlbumGrid(vm)
-                }
+                else -> LibraryTabs(vm)
             }
         }
+    }
+}
+
+/** 「アルバム」「曲」の 2 タブ。タブのタップとスワイプの両方で切り替えられる */
+@Composable
+private fun LibraryTabs(vm: PlayerViewModel) {
+    val titles = listOf("アルバム", "曲")
+    val pagerState = rememberPagerState(initialPage = vm.selectedTab) { titles.size }
+    val scope = rememberCoroutineScope()
+
+    // スワイプで移動したページを ViewModel に覚えさせる（回転しても同じタブに戻る）
+    LaunchedEffect(pagerState.currentPage) { vm.selectedTab = pagerState.currentPage }
+
+    TabRow(selectedTabIndex = pagerState.currentPage) {
+        titles.forEachIndexed { index, title ->
+            Tab(
+                selected = pagerState.currentPage == index,
+                onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                text = { Text(title) },
+            )
+        }
+    }
+    HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+        if (page == 0) AlbumList(vm) else SongList(vm)
     }
 }
 
@@ -180,34 +198,19 @@ private fun SongList(vm: PlayerViewModel) {
     }
 }
 
-/** 「アルバム」タブ: アルバムを 2 列のグリッドで表示 */
+/** 「アルバム」タブ: アルバムを曲一覧と同じ見た目のリストで表示 */
 @Composable
-private fun AlbumGrid(vm: PlayerViewModel) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
+private fun AlbumList(vm: PlayerViewModel) {
+    LazyColumn(Modifier.fillMaxSize()) {
         items(vm.albums, key = { it.id }) { album ->
-            Column(Modifier.clickable { vm.openAlbum(album) }) {
-                AlbumArt(album.artUri, Modifier.fillMaxWidth().aspectRatio(1f))
-                Text(
-                    album.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-                Text(
-                    "${album.artist} ・ ${album.tracks.size}曲",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+            ListRow(
+                title = album.title,
+                subtitle = album.artist,
+                trailing = "${album.tracks.size}曲",
+                onClick = { vm.openAlbum(album) },
+                leading = { AlbumArt(album.artUri, Modifier.size(48.dp)) },
+            )
+            HorizontalDivider()
         }
     }
 }
@@ -285,23 +288,43 @@ private fun TrackRow(
     onClick: () -> Unit,
     leading: @Composable () -> Unit,
 ) {
-    val color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+    ListRow(
+        title = track.title,
+        subtitle = track.artist,
+        trailing = formatTime(track.durationMs),
+        onClick = onClick,
+        leading = leading,
+        highlighted = selected,
+    )
+}
+
+/** 曲・アルバム共通の 1 行: 先頭要素、タイトルと補足、右端の短いテキスト */
+@Composable
+private fun ListRow(
+    title: String,
+    subtitle: String,
+    trailing: String,
+    onClick: () -> Unit,
+    leading: @Composable () -> Unit,
+    highlighted: Boolean = false,
+) {
+    val color = if (highlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
     Row(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         leading()
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-            Text(track.title, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                track.artist,
+                subtitle,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Text(formatTime(track.durationMs), style = MaterialTheme.typography.bodySmall)
+        Text(trailing, style = MaterialTheme.typography.bodySmall)
     }
 }
 
