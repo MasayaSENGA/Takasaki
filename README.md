@@ -34,3 +34,7 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
+
+## ライセンス
+
+MIT License です。詳しくは [`LICENSE`](LICENSE) を参照してください。
