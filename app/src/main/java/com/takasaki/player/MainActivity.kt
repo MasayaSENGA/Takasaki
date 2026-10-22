@@ -50,6 +50,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -271,8 +272,14 @@ private fun AlbumDetail(vm: PlayerViewModel, album: Album) {
 @Composable
 private fun AlbumArt(uri: Uri?, modifier: Modifier) {
     val placeholder = painterResource(R.drawable.ic_music_note)
+    val context = LocalContext.current
+    val cachedUri by produceState<Uri?>(initialValue = null, uri) {
+        value = uri?.let { source ->
+            runCatching { AlbumArtCache.getCachedUri(context, source) }.getOrNull() ?: source
+        }
+    }
     AsyncImage(
-        model = uri,
+        model = cachedUri,
         contentDescription = null,
         placeholder = placeholder,
         error = placeholder,
