@@ -4,10 +4,18 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- 黒い連桁付き八分音符（円形マスクのセーフゾーン内に収まる大きさ） -->
-    <group android:scaleX="1.2" android:scaleY="1.2" android:pivotX="54" android:pivotY="54">
-        <path
-            android:fillColor="#000000"
-            android:pathData="M42,36 L42,66.5 A6,6 0 1 1 36,61 L36,36 Z M66,32 L66,62.5 A6,6 0 1 1 60,57 L60,32 Z M36,36 L66,32 L66,39 L36,43 Z" />
-    </group>
+    <!-- A warm record and play mark, kept inside the adaptive icon safe zone. -->
+    <path android:fillColor="#E8E9D8" android:pathData="M54,22 A32,32 0 1,0 54,86 A32,32 0 1,0 54,22" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#9DAF9D"
+        android:strokeWidth="1.5"
+        android:pathData="M54,29 A25,25 0 1,0 54,79 A25,25 0 1,0 54,29" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#9DAF9D"
+        android:strokeWidth="1.5"
+        android:pathData="M54,35 A19,19 0 1,0 54,73 A19,19 0 1,0 54,35" />
+    <path android:fillColor="#D5964B" android:pathData="M48,42.5 L48,65.5 A2,2 0 0,0 51,67 L68,55.5 A2,2 0 0,0 68,52.5 L51,41 A2,2 0 0,0 48,42.5 Z" />
+    <path android:fillColor="#183B31" android:pathData="M54,49 A5,5 0 1,0 54,59 A5,5 0 1,0 54,49" />
 </vector>
