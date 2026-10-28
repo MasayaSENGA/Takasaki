@@ -28,8 +28,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -141,6 +143,8 @@ private fun PlayerScreen(vm: PlayerViewModel) {
     // アルバム詳細を開いているときは、戻るボタンでアルバム一覧に戻る
     val album = vm.selectedAlbum
     BackHandler(enabled = album != null) { vm.closeAlbum() }
+    // 詳細表示中もスクロール位置を保持し、一覧へ戻った時に同じ位置から再表示する
+    val albumListState = rememberLazyListState()
 
     Scaffold(
         bottomBar = { if (vm.currentTrack != null) ControlBar(vm) },
@@ -149,7 +153,7 @@ private fun PlayerScreen(vm: PlayerViewModel) {
             when {
                 vm.tracks.isEmpty() -> EmptyMessage()
                 album != null -> AlbumDetail(vm, album)
-                else -> LibraryTabs(vm)
+                else -> LibraryTabs(vm, albumListState)
             }
         }
     }
@@ -157,7 +161,7 @@ private fun PlayerScreen(vm: PlayerViewModel) {
 
 /** 「アルバム」「曲」の 2 タブ。タブのタップとスワイプの両方で切り替えられる */
 @Composable
-private fun LibraryTabs(vm: PlayerViewModel) {
+private fun LibraryTabs(vm: PlayerViewModel, albumListState: LazyListState) {
     val titles = listOf("アルバム", "曲")
     val pagerState = rememberPagerState(initialPage = vm.selectedTab) { titles.size }
     val scope = rememberCoroutineScope()
@@ -175,7 +179,7 @@ private fun LibraryTabs(vm: PlayerViewModel) {
         }
     }
     HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
-        if (page == 0) AlbumList(vm) else SongList(vm)
+        if (page == 0) AlbumList(vm, albumListState) else SongList(vm)
     }
 }
 
@@ -204,8 +208,8 @@ private fun SongList(vm: PlayerViewModel) {
 
 /** 「アルバム」タブ: アルバムを曲一覧と同じ見た目のリストで表示 */
 @Composable
-private fun AlbumList(vm: PlayerViewModel) {
-    LazyColumn(Modifier.fillMaxSize()) {
+private fun AlbumList(vm: PlayerViewModel, listState: LazyListState) {
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
         items(vm.albums, key = { it.id }) { album ->
             ListRow(
                 title = album.title,
