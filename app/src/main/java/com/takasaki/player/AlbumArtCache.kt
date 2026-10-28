@@ -25,14 +25,21 @@ internal object AlbumArtCache {
     private val pending = ConcurrentHashMap<String, Deferred<File?>>()
     private val locks = ConcurrentHashMap<String, Mutex>()
 
+    /** Must be called on Dispatchers.IO; also refreshes the entry's LRU timestamp. */
+    private fun findCachedUri(context: Context, source: Uri): Uri? {
+        val key = source.toString().toByteArray().sha256()
+        val target = File(File(context.filesDir, "album_art"), "$key.jpg")
+        return if (target.isFile && target.length() > 0L) {
+            target.setLastModified(System.currentTimeMillis())
+            Uri.fromFile(target)
+        } else null
+    }
+
     suspend fun getCachedUri(context: Context, source: Uri): Uri? = withContext(Dispatchers.IO) {
-        val directory = File(context.cacheDir, "album_art").apply { mkdirs() }
+        val directory = File(context.filesDir, "album_art").apply { mkdirs() }
         val key = source.toString().toByteArray().sha256()
         val target = File(directory, "$key.jpg")
-        if (target.isFile && target.length() > 0L) {
-            target.setLastModified(System.currentTimeMillis())
-            return@withContext Uri.fromFile(target)
-        }
+        findCachedUri(context, source)?.let { return@withContext it }
 
         val task = pending.computeIfAbsent(key) {
             scope.async { createThumbnail(context.applicationContext, source, target) }
